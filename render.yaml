@@ -2,14 +2,15 @@ services:
   - type: web
     name: product-agent
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: DATA_DIR
-        value: /tmp/product-agent-data
+        value: /var/data
     disk:
       name: product-agent-data
-      mountPath: /tmp/product-agent-data
+      mountPath: /var/data
+      sizeGB: 1

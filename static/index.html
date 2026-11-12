@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Agent</title>
+<style>
+:root { --bg:#f7f7f5; --surface:#fff; --text:#1d1d1f; --muted:#6e6e73; --accent:#3b6cf6; --line:#e4e4e0; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141416; --surface:#1f1f22; --text:#f2f2f4; --muted:#9a9aa2; --accent:#6d93ff; --line:#2e2e33; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+h1 { font-size: 22px; margin: 8px 0 0; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+button { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-size: 15px; cursor: pointer; margin: 4px 4px 4px 0; }
+button.secondary { background: none; color: var(--text); border: 1px solid var(--line); }
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.log { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+ul { list-style: none; padding: 0; margin: 0; }
+li { padding: 10px 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+li:first-child { border-top: none; }
+.meta { color: var(--muted); font-size: 13px; }
+.score { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.status { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Product Agent</h1>
+  <p class="status" id="status">Loading...</p>
+
+  <section class="card">
+    <h2>Run</h2>
+    <div class="row">
+      <button id="btnDiscover">1. Find ~15 ideas</button>
+      <button id="btnScore">2. Score and queue top 5</button>
+      <button id="btnBuild">3. Build next in queue</button>
+      <button class="secondary" id="btnClear">Clear all</button>
+    </div>
+    <p class="note">Each step runs on the server in the background. Progress is saved, so you can close this page and come back later.</p>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section class="card">
+    <h2>Ideas (<span id="ideaCount">0</span>)</h2>
+    <ul id="ideas"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Queue</h2>
+    <ul id="queue"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Finished products</h2>
+    <ul id="products"></ul>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+let lastState = null;
+
+async function api(path, method = "GET") {
+  const res = await fetch(path, { method });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) alert(data.error || "Request failed");
+  return data;
+}
+
+function render(s) {
+  lastState = s;
+  $("status").textContent = s.busy ? `Working: ${s.busy}...` : "Idle";
+  ["btnDiscover","btnScore","btnBuild","btnClear"].forEach(id => $(id).disabled = !!s.busy);
+  $("ideaCount").textContent = s.ideas.length;
+  $("ideas").innerHTML = s.ideas.map(i => `
+    <li><div><strong>${esc(i.name)}</strong><div class="meta">${esc(i.description)}</div>
+    <div class="meta">Buyer: ${esc(i.buyer)} · $${esc(i.price_usd)} · demand ${esc(i.demand)}/5 · competition ${esc(i.competition)}/5 · effort ${esc(i.build_effort)}/5</div></div>
+    <span class="score">${i.score ?? "-"}</span></li>`).join("") || `<li class="meta">No ideas yet.</li>`;
+  $("queue").innerHTML = s.queue.map(i => `<li><span>${esc(i.name)}</span><span class="score">${i.score}</span></li>`).join("") || `<li class="meta">Queue empty.</li>`;
+  $("products").innerHTML = s.products.map(p => `
+    <li><div><strong>${esc(p.name)}</strong><div class="meta">${esc(p.description)}</div></div>
+    <a href="/api/products/${p.index}/download"><button class="secondary">Download HTML</button></a></li>`).join("") || `<li class="meta">Nothing built yet.</li>`;
+  const logEl = $("log");
+  const atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+  logEl.textContent = s.log.join("\n");
+  if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function refresh() {
+  try { render(await api("/api/state")); } catch (e) { $("status").textContent = "Cannot reach server"; }
+}
+
+$("btnDiscover").onclick = async () => { await api("/api/discover", "POST"); refresh(); };
+$("btnScore").onclick = async () => { await api("/api/score", "POST"); refresh(); };
+$("btnBuild").onclick = async () => { await api("/api/build", "POST"); refresh(); };
+$("btnClear").onclick = async () => {
+  if (!confirm("Clear all ideas, queue, and products?")) return;
+  await api("/api/clear", "POST"); refresh();
+};
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ad Creative Agent</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #0d1320;
+        color: #eef3ff;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 24px 16px 60px;
+      }
+      .card {
+        background: #131d2f;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
+        padding: 20px;
+        margin-top: 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2.3rem;
+      }
+      p, li {
+        color: #c9d6f0;
+        line-height: 1.5;
+      }
+      textarea, input, select, button {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 12px 14px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+        background: #0f1728;
+        color: white;
+      }
+      input, select {
+        background: #0f1728;
+        color: white;
+      }
+      button {
+        background: linear-gradient(90deg, #7dd3fc, #a78bfa);
+        color: #07121f;
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+      }
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        color: #dfeaff;
+        font-size: 0.9rem;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+      .muted {
+        color: #a9bbdb;
+      }
+      .error {
+        color: #ff9ca6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Ad Creative Agent</h1>
+        <p class="muted">Create a premium 20–30 second ad concept from a product description.</p>
+
+        <form id="ad-form">
+          <div class="grid">
+            <div>
+              <label class="label">Product name</label>
+              <input name="product_name" value="NovaFlow AI" />
+            </div>
+
+            <div>
+              <label class="label">Platform</label>
+              <select name="platform">
+                <option>Instagram Reels</option>
+                <option>TikTok</option>
+                <option>YouTube Shorts</option>
+                <option>Meta Ads</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;">
+            <label class="label">Product description</label>
+            <textarea name="description" required>AI software that helps agencies and founders automate follow-up, qualify leads, and book more calls without extra manual work.</textarea>
+          </div>
+
+          <div style="margin-top:14px;">
+            <label class="label">CTA</label>
+            <input name="cta" value="Book a demo" />
+          </div>
+
+          <div style="margin-top:14px;">
+            <button type="submit">Create ad concept</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="output" class="card">
+        <p class="muted">Your ad concept will appear here.</p>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById('ad-form');
+      const output = document.getElementById('output');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const formData = new FormData(form);
+        const payload = {
+          product_name: formData.get('product_name') || 'Product',
+          description: formData.get('description') || '',
+          target_audience: 'founders and service businesses',
+          platform: formData.get('platform') || 'Instagram Reels',
+          style: 'luxury cinematic',
+          cta: formData.get('cta') || 'Book a demo',
+          duration_seconds: 25,
+          tone: 'premium high-converting'
+        };
+
+        output.innerHTML = '<p>Building the ad concept...</p>';
+
+        try {
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data || !data.brief || !data.script) {
+            throw new Error('Server returned an invalid ad payload.');
+          }
+
+          const html = `
+            <h2>${data.brief.product_name}</h2>
+            <p><strong>Hook:</strong> ${data.brief.hook}</p>
+            <p>${data.brief.angle}</p>
+
+            <h3>Script</h3>
+            ${data.script.ad_copy_lines.map(line => `<p>${line}</p>`).join('')}
+            <p><strong>CTA:</strong> ${data.script.cta}</p>
+
+            <h3>Storyboard</h3>
+            <ul>
+              ${data.storyboard.map(shot => `<li><strong>${shot.time}</strong> — ${shot.visual}</li>`).join('')}
+            </ul>
+
+            <h3>Visual prompts</h3>
+            <ul>
+              ${data.visual_prompts.map(prompt => `<li>${prompt}</li>`).join('')}
+            </ul>
+          `;
+
+          output.innerHTML = html;
+        } catch (error) {
+          output.innerHTML = '<p class="error">The ad generator failed. Please make sure the product description is filled in and try again.</p>';
+        }
+      });
+    </script>
+  </body>
+</html>
